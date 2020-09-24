@@ -16,6 +16,10 @@ apt-get DPkg::options::="--force-confdef" -o DPkg::options::="--force-confold" d
 apt-get install zip unzip fail2ban htop sqlite3 nload mlocate nano memcached software-properties-common -y -q
 # Install Nginx && PHP-FPM stack
 apt-get install php-curl php-fpm php-gd php-mbstring php-opcache php-xml php-mysql php-imagick -y -q
+
+sudo apt-get install libapache2-mod-php7.2 php7.2 php7.2-bcmath php7.2-common php7.2-curl \
+      php7.2-dom php7.2-gd php7.2-intl php7.2-mbstring php7.2-mysql php7.2-simplexml \
+      php7.2-soap php7.2-xml php7.2-xsl php7.2-zip php7.2-json  -y -q
 # Create a folder to backup current installation of Nginx && PHP-FPM
 now=$(date +"%Y-%m-%d_%H-%M-%S") 
 mkdir /backup/
