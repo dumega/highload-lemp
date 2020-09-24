@@ -13,9 +13,9 @@ apt-get update -y -q
 # Update installed packages
 apt-get DPkg::options::="--force-confdef" -o DPkg::options::="--force-confold" dist-upgrade -y -q
 # Install the most common packages that will be usefull under development environment
-apt-get install zip unzip fail2ban htop sqlite3 nload mlocate nano memcached python-software-properties software-properties-common -y -q
+apt-get install zip unzip fail2ban htop sqlite3 nload mlocate nano memcached software-properties-common -y -q
 # Install Nginx && PHP-FPM stack
-apt-get install php7.0-curl php7.0-fpm php7.0-gd php7.0-mbstring php7.0-mcrypt php7.0-opcache php7.0-xml php7.0-sqlite php7.0-mysql php-imagick -y -q
+apt-get install php-curl php-fpm php-gd php-mbstring php-opcache php-xml php-mysql php-imagick -y -q
 # Create a folder to backup current installation of Nginx && PHP-FPM
 now=$(date +"%Y-%m-%d_%H-%M-%S") 
 mkdir /backup/
@@ -40,7 +40,7 @@ systemctl unmask nginx.service
 # https://blog.cloudflare.com/results-experimenting-brotli/
 apt-get install nginx-module-brotli -y -q
 # Disable external access to PHP-FPM scripts
-sed -i "s/^;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/" /etc/php/7.2/fpm/php.ini
 # Create an additional configuration folder for Nginx
 mkdir /etc/nginx/conf.d
 # Download list of bad bots, bad ip's and bad referres
@@ -66,15 +66,16 @@ echo -e "-a 775" >> /etc/memcached.conf
 service memcached restart
 # Add repository for MariaDB 10.2
 apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-add-apt-repository 'deb [arch=amd64,i386,ppc64el] http://ams2.mirrors.digitalocean.com/mariadb/repo/10.2/ubuntu xenial main' -y
+sudo add-apt-repository 'deb [arch=amd64] http://sgp1.mirrors.digitalocean.com/mariadb/repo/10.3/ubuntu/ bionic main' -y
 # Update list of available packages
-apt-get update -y -q
+sudo apt-get update -y -q
 # Use md5 hash of your hostname to define a root password for MariDB
 password=$(hostname | md5sum | awk '{print $1}')
-debconf-set-selections <<< "mariadb-server-10.2 mysql-server/root_password password $password"
-debconf-set-selections <<< "mariadb-server-10.2 mysql-server/root_password_again password $password"
+debconf-set-selections <<< "mariadb-server-10.3 mysql-server/root_password password $password"
+debconf-set-selections <<< "mariadb-server-10.3 mysql-server/root_password_again password $password"
 # Install MariaDB package
-apt-get install mariadb-server -y -q
+sudo apt -y install mariadb-server mariadb-client
+# apt-get install mariadb-server -y -q
 # Add custom configuration for your Mysql
 # All modified variables are available at https://mariadb.com/kb/en/library/server-system-variables/
 echo -e "\n[mysqld]\nmax_connections=24\nconnect_timeout=10\nwait_timeout=10\nthread_cache_size=24\nsort_buffer_size=1M\njoin_buffer_size=1M\ntmp_table_size=8M\nmax_heap_table_size=1M\nbinlog_cache_size=8M\nbinlog_stmt_cache_size=8M\nkey_buffer_size=1M\ntable_open_cache=64\nread_buffer_size=1M\nquery_cache_limit=1M\nquery_cache_size=8M\nquery_cache_type=1\ninnodb_buffer_pool_size=8M\ninnodb_open_files=1024\ninnodb_io_capacity=1024\ninnodb_buffer_pool_instances=1" >> /etc/mysql/my.cnf
@@ -99,7 +100,7 @@ chown -R www-data:www-data /var/www/*
 echo -e "*       soft    nofile  1000000" >> /etc/security/limits.conf
 echo -e "*       hard    nofile  1000000" >> /etc/security/limits.conf
 # Switch to the ondemand state of PHP-FPM
-sed -i "s/^pm = .*/pm = ondemand/" /etc/php/7.0/fpm/pool.d/www.conf
+sed -i "s/^pm = .*/pm = ondemand/" /etc/php/7.2/fpm/pool.d/www.conf
 # Use such number of children that will not hurt other parts of the system
 # Let's assume that system itself needs 128 MB of RAM
 # Let's assume that we let have MariaDB another 256 MB to run
@@ -107,54 +108,54 @@ sed -i "s/^pm = .*/pm = ondemand/" /etc/php/7.0/fpm/pool.d/www.conf
 # On the 1 GB system that leads up to 632 MB of free memory
 # If we give one PHP-FPM child a moderate amount of RAM for example 32 MB that will let us create 19 PHP-FPM proccesses at max
 # Check median of how much PHP-FPM child consumes with the following command
-# ps --no-headers -o "rss,cmd" -C php-fpm7.0 | awk '{ sum+=$1 } END { printf ("%d%s\n", sum/NR/1024,"M") }'
+# ps --no-headers -o "rss,cmd" -C php-fpm7.2 | awk '{ sum+=$1 } END { printf ("%d%s\n", sum/NR/1024,"M") }'
 ram=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
 free=$(((ram/1024)-128-256-8))
 php=$(((free/32)))
 children=$(printf %.0f $php)
-sed -i "s/^pm.max_children = .*/pm.max_children = $children/" /etc/php/7.0/fpm/pool.d/www.conf
+sed -i "s/^pm.max_children = .*/pm.max_children = $children/" /etc/php/7.2/fpm/pool.d/www.conf
 # Comment default dynamic mode settings and make them more adequate
-sed -i "s/^pm.start_servers = .*/;pm.start_servers = 5/" /etc/php/7.0/fpm/pool.d/www.conf
-sed -i "s/^pm.min_spare_servers = .*/;pm.min_spare_servers = 2/" /etc/php/7.0/fpm/pool.d/www.conf
-sed -i "s/^pm.max_spare_servers = .*/;pm.max_spare_servers = 2/" /etc/php/7.0/fpm/pool.d/www.conf
+sed -i "s/^pm.start_servers = .*/;pm.start_servers = 5/" /etc/php/7.2/fpm/pool.d/www.conf
+sed -i "s/^pm.min_spare_servers = .*/;pm.min_spare_servers = 2/" /etc/php/7.2/fpm/pool.d/www.conf
+sed -i "s/^pm.max_spare_servers = .*/;pm.max_spare_servers = 2/" /etc/php/7.2/fpm/pool.d/www.conf
 # State what amount of request one PHP-FPM child can sustain
-sed -i "s/^;pm.max_requests = .*/pm.max_requests = 400/" /etc/php/7.0/fpm/pool.d/www.conf
+sed -i "s/^;pm.max_requests = .*/pm.max_requests = 400/" /etc/php/7.2/fpm/pool.d/www.conf
 # State after what amount of time unused PHP-FPM children will stop
-sed -i "s/^;pm.process_idle_timeout = .*/pm.process_idle_timeout = 10s;/" /etc/php/7.0/fpm/pool.d/www.conf
+sed -i "s/^;pm.process_idle_timeout = .*/pm.process_idle_timeout = 10s;/" /etc/php/7.2/fpm/pool.d/www.conf
 # Create a /status path for your webserver in order to track current requests to it
 # Use IP/status to check PHP-FPM stats or IP/status?full&html for more detailed results
-sed -i "s/^;pm.status_path = \/status/pm.status_path = \/status/" /etc/php/7.0/fpm/pool.d/www.conf
+sed -i "s/^;pm.status_path = \/status/pm.status_path = \/status/" /etc/php/7.2/fpm/pool.d/www.conf
 # Create a /ping path for your PHP-FPM installation in order to be able to make heartbeat calls to it
-sed -i "s/^;ping.path = \/ping/ping.path = \/ping/" /etc/php/7.0/fpm/pool.d/www.conf
+sed -i "s/^;ping.path = \/ping/ping.path = \/ping/" /etc/php/7.2/fpm/pool.d/www.conf
 # Enable PHP-FPM Opcache
-sed -i "s/^;opcache.enable=0/opcache.enable=1/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.enable=0/opcache.enable=1/" /etc/php/7.2/fpm/php.ini
 # Set maximum memory limit for OPcache
-sed -i "s/^;opcache.memory_consumption=64/opcache.memory_consumption=64/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.memory_consumption=64/opcache.memory_consumption=64/" /etc/php/7.2/fpm/php.ini
 # Raise the maximum limit of variable that can be stored in OPcache
-sed -i "s/^;opcache.interned_strings_buffer=4/opcache.interned_strings_buffer=16/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.interned_strings_buffer=4/opcache.interned_strings_buffer=16/" /etc/php/7.2/fpm/php.ini
 # Set maximum amount fo files to be cached in OPcache
-sed -i "s/^;opcache.max_accelerated_files=2000/opcache.max_accelerated_files=65536/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.max_accelerated_files=2000/opcache.max_accelerated_files=65536/" /etc/php/7.2/fpm/php.ini
 # Enabled using directory path in order to avoid collision between two files with identical names in OPcache
-sed -i "s/^;opcache.use_cwd=1/opcache.use_cwd=1/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.use_cwd=1/opcache.use_cwd=1/" /etc/php/7.2/fpm/php.ini
 # Enable validation of changes in php files
-sed -i "s/^;opcache.validate_timestamps=1/opcache.validate_timestamps=1/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.validate_timestamps=1/opcache.validate_timestamps=1/" /etc/php/7.2/fpm/php.ini
 # Set validation period in seconds for OPcache file
-sed -i "s/^;opcache.revalidate_freq=2/opcache.revalidate_freq=2/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.revalidate_freq=2/opcache.revalidate_freq=2/" /etc/php/7.2/fpm/php.ini
 # Disable comments to be put in OPcache code
-sed -i "s/^;opcache.save_comments=1/opcache.save_comments=0/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.save_comments=1/opcache.save_comments=0/" /etc/php/7.2/fpm/php.ini
 # Enable fast shutdown
-sed -i "s/^;opcache.fast_shutdown=0/opcache.fast_shutdown=1/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.fast_shutdown=0/opcache.fast_shutdown=1/" /etc/php/7.2/fpm/php.ini
 # Set period in seconds in which PHP-FPM should restart if OPcache is not accessible
-sed -i "s/^;opcache.force_restart_timeout=180/opcache.force_restart_timeout=30/" /etc/php/7.0/fpm/php.ini
+sed -i "s/^;opcache.force_restart_timeout=180/opcache.force_restart_timeout=30/" /etc/php/7.2/fpm/php.ini
 # Reload Nginx installation
 /etc/init.d/nginx reload 
 # Reload PHP-FPM installation
-/etc/init.d/php7.0-fpm reload
+/etc/init.d/php7.2-fpm reload
 # Add a rule for iptables in order to make Monit be able to work on this port
 iptables -A INPUT -p tcp -m tcp --dport 2812 -j ACCEPT
 # Install a Monit service in order to maintain system fault tolerance
 # Using ver. 1:5.16-2 because of the bug in the last version https://bugs.launchpad.net/ubuntu/+source/monit/+bug/1786910
-apt-get install monit=1:5.16-2 -y -q
+apt-get install monit -y -q
 # Create a full backup of default Monit configuration
 now=$(date +"%Y-%m-%d_%H-%M-%S") 
 mkdir /backup/$now/
@@ -171,10 +172,10 @@ sed -i "s/^#.*allow admin:monit.*/allow admin:monit/" /etc/monit/monitrc
 # Tell monit to not search *.conf files in this directory
 sed -i "s/^.*include \/etc\/monit\/conf-enabled\/\*/#include \/etc\/monit\/conf-enabled\/\*/" /etc/monit/monitrc
 # Create a Monit configuration file to watch after PHP-FPM
-# Monit will check the availability of php7.0-fpm.sock
-# And restart php7.0-fpm service if it can't be accessible
+# Monit will check the availability of php7.2-fpm.sock
+# And restart php7.2-fpm service if it can't be accessible
 # If Monit tries to many times to restart it withour success it will take a timeout and then proceed to restart again
-echo -e 'check process php7.0-fpm with pidfile /var/run/php/php7.0-fpm.pid\nstart program = "/etc/init.d/php7.0-fpm start"\nstop program = "/etc/init.d/php7.0-fpm stop"\nif failed unixsocket /run/php/php7.0-fpm.sock then restart\nif 5 restarts within 5 cycles then timeout' > /etc/monit/conf.d/php7.0-fpm.conf
+echo -e 'check process php7.2-fpm with pidfile /var/run/php/php7.2-fpm.pid\nstart program = "/etc/init.d/php7.2-fpm start"\nstop program = "/etc/init.d/php7.2-fpm stop"\nif failed unixsocket /run/php/php7.2-fpm.sock then restart\nif 5 restarts within 5 cycles then timeout' > /etc/monit/conf.d/php7.2-fpm.conf
 # Create a Monit configuration file to watch after Nginx
 # This one doesn't need Monit to restart it because Nginx is basically unbreakable
 echo -e 'check process nginx with pidfile /var/run/nginx.pid\nstart program = "/etc/init.d/nginx start"\nstop program = "/etc/init.d/nginx stop"' > /etc/monit/conf.d/nginx.conf
